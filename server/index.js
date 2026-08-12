@@ -106,6 +106,7 @@ io.on("connection", (socket) => {
     if (fromTeam === toTeam) return;
     const reqObj = {
       id: nanoid(10),
+      date: store.todayStr(),
       fromTeam,
       toTeam,
       meetingTime: typeof meetingTime === "string" ? meetingTime.slice(0, 40) : "",

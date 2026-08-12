@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { socket } from "./socket";
 import { playBell } from "./sound";
+import { todayStr } from "./date";
 
 const WorkflowContext = createContext(null);
 
@@ -136,12 +137,23 @@ export function WorkflowProvider({ children }) {
     [whoAmI]
   );
 
+  const today = todayStr();
+  const todayGoal = useMemo(
+    () => (goal.date === today ? goal : { date: today, content: "", updatedBy: "", updatedAt: null }),
+    [goal, today]
+  );
+  const todayTasks = useMemo(() => tasks.filter((t) => t.date === today), [tasks, today]);
+  const todayCollabRequests = useMemo(
+    () => collabRequests.filter((r) => r.date === today),
+    [collabRequests, today]
+  );
+
   const value = {
     connected,
     teams,
-    goal,
-    tasks,
-    collabRequests,
+    goal: todayGoal,
+    tasks: todayTasks,
+    collabRequests: todayCollabRequests,
     myTeam,
     myName,
     setMyTeam,
