@@ -28,6 +28,10 @@ function migrateTasks(tasks) {
   for (const t of tasks) {
     if (!Array.isArray(t.subtasks)) t.subtasks = [];
     if (!t.status) t.status = t.done ? "done" : "pending";
+    if (typeof t.assignee !== "string") t.assignee = "";
+    for (const s of t.subtasks) {
+      if (typeof s.assignee !== "string") s.assignee = "";
+    }
   }
   return tasks;
 }
@@ -117,6 +121,16 @@ function toggleSubtask(taskId, subtaskId) {
   return t;
 }
 
+function updateSubtask(taskId, subtaskId, patch) {
+  const t = state.tasks.find((x) => x.id === taskId);
+  if (!t || !Array.isArray(t.subtasks)) return null;
+  const idx = t.subtasks.findIndex((x) => x.id === subtaskId);
+  if (idx === -1) return null;
+  t.subtasks[idx] = { ...t.subtasks[idx], ...patch, id: subtaskId };
+  save();
+  return t;
+}
+
 function deleteSubtask(taskId, subtaskId) {
   const t = state.tasks.find((x) => x.id === taskId);
   if (!t || !Array.isArray(t.subtasks)) return null;
@@ -170,6 +184,7 @@ module.exports = {
   deleteTask,
   addSubtask,
   toggleSubtask,
+  updateSubtask,
   deleteSubtask,
   addCollabRequest,
   updateCollabRequest,

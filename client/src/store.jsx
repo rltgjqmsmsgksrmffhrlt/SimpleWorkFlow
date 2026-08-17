@@ -146,14 +146,15 @@ export function WorkflowProvider({ children }) {
   const actions = useMemo(
     () => ({
       setGoal: (content) => socket.emit("goal:set", { content, updatedBy: whoAmI }),
-      createTask: (teamId, time, endTime, title, memo) =>
+      createTask: (teamId, time, endTime, title, memo, assignee) =>
         new Promise((resolve) => {
-          socket.emit("task:create", { teamId, time, endTime, title, memo }, (task) => resolve(task));
+          socket.emit("task:create", { teamId, time, endTime, title, memo, assignee }, (task) => resolve(task));
         }),
       updateTask: (id, patch) => socket.emit("task:update", { id, patch }),
       deleteTask: (id) => socket.emit("task:delete", { id }),
-      addSubtask: (taskId, title) => socket.emit("task:subtask:add", { taskId, title }),
+      addSubtask: (taskId, title, assignee) => socket.emit("task:subtask:add", { taskId, title, assignee }),
       toggleSubtask: (taskId, subtaskId) => socket.emit("task:subtask:toggle", { taskId, subtaskId }),
+      updateSubtask: (taskId, subtaskId, patch) => socket.emit("task:subtask:update", { taskId, subtaskId, patch }),
       deleteSubtask: (taskId, subtaskId) => socket.emit("task:subtask:delete", { taskId, subtaskId }),
       createCollab: (fromTeam, toTeam, meetingTime, agenda) =>
         socket.emit("collab:create", { fromTeam, toTeam, meetingTime, agenda, requestedBy: whoAmI }),

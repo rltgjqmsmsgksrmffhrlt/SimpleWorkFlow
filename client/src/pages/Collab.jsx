@@ -9,10 +9,21 @@ const STATUS_LABEL = {
   declined: "거절됨",
 };
 
-function nowLocalInputValue() {
-  const d = new Date();
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+export const MEETING_MINUTES = 60;
+
+const PLATFORMS = [
+  { id: "discord", name: "디스코드", unit: "번방" },
+  { id: "zep", name: "Zep", unit: "번 미팅룸" },
+  { id: "other", name: "기타", unit: "" },
+];
+
+export function formatPlace(req) {
+  if (!req.placePlatform) return "";
+  const p = PLATFORMS.find((x) => x.id === req.placePlatform);
+  if (!p) return "";
+  const room = (req.placeRoom || "").trim();
+  if (!room) return p.name;
+  return p.unit ? `${p.name} ${room}${p.unit}` : `${p.name} ${room}`;
 }
 
 function formatMeetingTime(value) {
@@ -23,45 +34,31 @@ function formatMeetingTime(value) {
   return `${d.getMonth() + 1}월 ${d.getDate()}일(${days[d.getDay()]}) ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-function RequestCard({ req, teamName, myTeam, onConfirm, onDecline, onDelete, onRemind, onSchedule }) {
-  const isMine = req.toTeam === myTeam;
-  const involvesMe = req.fromTeam === myTeam || req.toTeam === myTeam;
-  const isPending = req.status === "pending";
-  const hasSchedule = Boolean(req.meetingTime);
-  const canEdit = involvesMe && isPending;
+function RequestCard({ req, teamName, myTeam, onDecline, onDelete, onRemind, onPatch }) {
+  // The requesting team owns place + agenda; the receiving team owns the time.
+  const isRequester = req.fromTeam === myTeam;
+  const isRequestee = req.toTeam === myTeam;
+  const isOpen = req.status !== "declined";
+  const hasTime = Boolean(req.meetingTime);
   const [declining, setDeclining] = useState(false);
-  const [altTime, setAltTime] = useState(nowLocalInputValue);
   const [declineNote, setDeclineNote] = useState("");
-  const [timeDraft, setTimeDraft] = useState(req.meetingTime || "");
   const [agendaDraft, setAgendaDraft] = useState(req.agenda || "");
+  const [roomDraft, setRoomDraft] = useState(req.placeRoom || "");
 
   useEffect(() => {
-    setTimeDraft(req.meetingTime || "");
     setAgendaDraft(req.agenda || "");
-  }, [req.meetingTime, req.agenda]);
-
-  function startDecline() {
-    setAltTime(nowLocalInputValue());
-    setDeclineNote("");
-    setDeclining(true);
-  }
+    setRoomDraft(req.placeRoom || "");
+  }, [req.agenda, req.placeRoom]);
 
   function submitDecline() {
-    onDecline(req.id, altTime, declineNote);
+    onDecline(req.id, declineNote);
     setDeclining(false);
   }
 
-  function commitTime(value) {
-    setTimeDraft(value);
-    onSchedule(req.id, value, agendaDraft);
-  }
-
-  function commitAgenda() {
-    if (agendaDraft !== (req.agenda || "")) onSchedule(req.id, timeDraft, agendaDraft);
-  }
+  const place = formatPlace(req);
 
   return (
-    <div className={`collab-card status-${req.status} ${isMine && isPending ? "highlight" : ""}`}>
+    <div className={`collab-card status-${req.status} ${isRequestee && req.status === "pending" ? "highlight" : ""}`}>
       <div className="collab-card-top">
         <div className="collab-route">
           <span className="team-pill">{teamName(req.fromTeam)}</span>
@@ -71,51 +68,85 @@ function RequestCard({ req, teamName, myTeam, onConfirm, onDecline, onDelete, on
         <span className={`status-badge ${req.status}`}>{STATUS_LABEL[req.status]}</span>
       </div>
 
-      {canEdit ? (
-        <div className="collab-inline-fields">
-          <input
-            type="datetime-local"
-            value={timeDraft}
-            onChange={(e) => commitTime(e.target.value)}
-            title="회의 시간"
-          />
-          <input
-            type="text"
-            value={agendaDraft}
-            onChange={(e) => setAgendaDraft(e.target.value)}
-            onBlur={commitAgenda}
-            placeholder="어떤 안건으로 볼까요?"
-            maxLength={1000}
-          />
-        </div>
-      ) : (
-        <>
-          <div className="collab-meeting-time">
-            회의 예정: {formatMeetingTime(req.meetingTime)}
-            {!hasSchedule && isPending && <span className="collab-unscheduled-tag">일정 미정</span>}
+      {isOpen && (
+        <div className="collab-fields">
+          <div className="collab-field">
+            <span className="collab-field-label">시간 {isRequestee && <em>내가 정함</em>}</span>
+            {isRequestee ? (
+              <input
+                type="datetime-local"
+                value={req.meetingTime || ""}
+                onChange={(e) => onPatch(req.id, { meetingTime: e.target.value })}
+              />
+            ) : (
+              <span className={`collab-field-value ${hasTime ? "" : "empty"}`}>
+                {hasTime ? formatMeetingTime(req.meetingTime) : "상대 팀이 정하는 중"}
+              </span>
+            )}
           </div>
-          {req.agenda && <div className="collab-agenda">{req.agenda}</div>}
-        </>
+
+          <div className="collab-field">
+            <span className="collab-field-label">장소 {isRequester && <em>내가 정함</em>}</span>
+            {isRequester ? (
+              <span className="collab-place-inputs">
+                <select
+                  value={req.placePlatform || ""}
+                  onChange={(e) => onPatch(req.id, { placePlatform: e.target.value })}
+                >
+                  <option value="">선택</option>
+                  {PLATFORMS.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="text"
+                  value={roomDraft}
+                  onChange={(e) => setRoomDraft(e.target.value)}
+                  onBlur={() => {
+                    if (roomDraft !== (req.placeRoom || "")) onPatch(req.id, { placeRoom: roomDraft });
+                  }}
+                  placeholder="방 번호"
+                  maxLength={60}
+                />
+              </span>
+            ) : (
+              <span className={`collab-field-value ${place ? "" : "empty"}`}>{place || "미정"}</span>
+            )}
+          </div>
+
+          <div className="collab-field wide">
+            <span className="collab-field-label">안건 {isRequester && <em>내가 정함</em>}</span>
+            {isRequester ? (
+              <input
+                type="text"
+                value={agendaDraft}
+                onChange={(e) => setAgendaDraft(e.target.value)}
+                onBlur={() => {
+                  if (agendaDraft !== (req.agenda || "")) onPatch(req.id, { agenda: agendaDraft });
+                }}
+                placeholder="어떤 안건으로 볼까요?"
+                maxLength={1000}
+              />
+            ) : (
+              <span className={`collab-field-value ${req.agenda ? "" : "empty"}`}>{req.agenda || "미정"}</span>
+            )}
+          </div>
+        </div>
       )}
 
-      {req.status === "declined" && (
-        <div className="collab-decline-note">
-          {req.suggestedTime && <div>제안된 시간: {formatMeetingTime(req.suggestedTime)}</div>}
-          {req.declineNote && <div>{req.declineNote}</div>}
-        </div>
+      {req.status === "declined" && req.declineNote && (
+        <div className="collab-decline-note">{req.declineNote}</div>
       )}
 
       {declining && (
         <div className="collab-decline-form">
-          <label>
-            가능한 시간을 제안해주세요
-            <input type="datetime-local" value={altTime} onChange={(e) => setAltTime(e.target.value)} />
-          </label>
           <input
             type="text"
             value={declineNote}
             onChange={(e) => setDeclineNote(e.target.value)}
-            placeholder="메모 (선택)"
+            placeholder="거절 사유 (선택)"
             maxLength={500}
           />
           <div className="collab-decline-actions">
@@ -123,7 +154,7 @@ function RequestCard({ req, teamName, myTeam, onConfirm, onDecline, onDelete, on
               취소
             </button>
             <button type="button" className="btn-primary small" onClick={submitDecline}>
-              제안 보내기
+              거절하기
             </button>
           </div>
         </div>
@@ -135,17 +166,12 @@ function RequestCard({ req, teamName, myTeam, onConfirm, onDecline, onDelete, on
           {req.remindCount > 0 && ` · 재알림 ${req.remindCount}회`}
         </span>
         <div className="collab-actions">
-          {canEdit && isMine && hasSchedule && !declining && (
-            <>
-              <button className="btn-primary small" onClick={() => onConfirm(req.id)}>
-                확정
-              </button>
-              <button className="btn-ghost small" onClick={startDecline}>
-                거절
-              </button>
-            </>
+          {isRequestee && isOpen && !declining && (
+            <button className="btn-ghost small" onClick={() => setDeclining(true)}>
+              거절
+            </button>
           )}
-          {canEdit && !isMine && (
+          {isRequester && req.status === "pending" && (
             <button className="btn-ghost small" onClick={() => onRemind(req.id)} title="상대 팀에게 다시 종을 울립니다">
               다시 알림
             </button>
@@ -233,16 +259,13 @@ export default function Collab() {
             req={req}
             teamName={teamName}
             myTeam={myTeam}
-            onConfirm={(id) => updateCollab(id, { status: "confirmed" })}
-            onDecline={(id, suggestedTime, declineNote) =>
-              updateCollab(id, { status: "declined", suggestedTime, declineNote })
-            }
+            onDecline={(id, declineNote) => updateCollab(id, { status: "declined", declineNote })}
             onDelete={deleteCollab}
             onRemind={(id) => {
               remindCollab(id);
               playBell();
             }}
-            onSchedule={(id, meetingTime, agenda) => updateCollab(id, { meetingTime, agenda })}
+            onPatch={updateCollab}
           />
         ))}
       </div>

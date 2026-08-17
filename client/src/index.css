@@ -1053,16 +1053,271 @@ textarea {
   color: white;
 }
 
+/* Team board: everything below the header fills the remaining height exactly,
+   so the day always fits on one screen and the page itself never scrolls. */
+.board-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.board-page .page-head {
+  flex-shrink: 0;
+}
+
+.board-split {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.board-split.with-pane {
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 32%);
+}
+
 /* Team board: Gantt chart */
 .gantt-scroll {
   background: var(--card);
   border: 1px solid var(--card-border);
   border-radius: var(--radius);
-  padding: 14px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* Right pane: subtasks and their owners */
+.assignee-pane {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.assignee-pane-head {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-dim);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--card-border);
+  flex-shrink: 0;
+}
+
+.assignee-pane-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+.ap-task {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ap-task-head {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.ap-task-time {
+  color: var(--accent-strong);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.ap-task-title {
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ap-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding-left: 4px;
+}
+
+.ap-row-label {
+  font-size: 11px;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+
+.ap-check {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  border-radius: 4px;
+  border: 1.5px solid var(--text-faint);
+  background: transparent;
+  color: white;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+}
+
+.ap-check.done {
+  background: var(--good);
+  border-color: var(--good);
+}
+
+.ap-sub-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ap-sub-title.done {
+  text-decoration: line-through;
+  color: var(--text-faint);
+}
+
+.ap-assignee {
+  width: 84px;
+  flex-shrink: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  padding: 3px 6px;
+  font-size: 11px;
+  color: var(--text);
+}
+
+.ap-assignee:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.ap-assignee.missing {
+  border-color: var(--bad);
+  background: rgba(245, 114, 114, 0.08);
+}
+
+.ap-assignee.missing::placeholder {
+  color: var(--bad);
+}
+
+.ap-del {
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  padding: 2px;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.ap-del:hover {
+  color: var(--bad);
+}
+
+.ap-add input {
+  width: 100%;
+  background: transparent;
+  border: 1px dashed var(--card-border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--text);
+  margin-left: 4px;
+}
+.ap-add input:focus {
+  outline: none;
+  border-style: solid;
+  border-color: var(--accent);
+}
+
+/* Fixed day structure: lunch + standing meetings, drawn behind task blocks */
+.gantt-fixed-band {
+  position: absolute;
+  left: 46px;
+  right: 0;
+  z-index: 0;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 6px;
+  border-top: 1px dashed var(--card-border);
+  border-bottom: 1px dashed var(--card-border);
+}
+
+/* Lunch reads as blocked-out time: faint grey cross-hatch. */
+.gantt-fixed-band.lunch {
+  background-color: rgba(255, 255, 255, 0.035);
+  background-image: repeating-linear-gradient(
+      45deg,
+      rgba(255, 255, 255, 0.07) 0,
+      rgba(255, 255, 255, 0.07) 1px,
+      transparent 1px,
+      transparent 6px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      rgba(255, 255, 255, 0.07) 0,
+      rgba(255, 255, 255, 0.07) 1px,
+      transparent 1px,
+      transparent 6px
+    );
+}
+
+.gantt-fixed-band.fixed {
+  background: rgba(138, 161, 255, 0.09);
+  border-color: rgba(138, 161, 255, 0.35);
+}
+
+.gantt-fixed-label {
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--text-faint);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.gantt-fixed-band.fixed .gantt-fixed-label {
+  color: var(--accent-strong);
+}
+
+/* Task and meeting blocks sit above the bands. */
+.gantt-col-track {
+  position: relative;
+  z-index: 1;
+}
+
+/* Missing-owner marker on a chart block */
+.assignee-warn {
+  color: var(--bad);
+  margin-left: 3px;
+  font-weight: 900;
 }
 
 .gantt-header {
   display: flex;
+  flex-shrink: 0;
 }
 
 .gantt-axis-spacer {
@@ -1073,17 +1328,20 @@ textarea {
 .gantt-col-head {
   flex: 1 1 0;
   min-width: 0;
-  padding: 8px 10px;
+  padding: 6px 8px;
   border-left: 1px solid var(--card-border);
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
+/* Takes whatever height is left; the time scale is derived from it in JS. */
 .gantt-body {
   position: relative;
   display: flex;
   margin-top: 6px;
+  flex: 1;
+  min-height: 0;
 }
 
 .gantt-axis {
@@ -1148,15 +1406,130 @@ textarea {
   white-space: nowrap;
 }
 
+/* Legend colours: grey = not started, green = in progress,
+   red = overdue, orange = meeting, faded = done. */
+.gantt-block.status-pending {
+  border-color: var(--card-border);
+  background: var(--card);
+}
+
 .gantt-block.status-in_progress {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  border-color: var(--good);
+  background: rgba(79, 208, 138, 0.16);
+}
+
+.gantt-block.status-in_progress .gantt-block-time {
+  color: var(--good);
+}
+
+.gantt-block.overdue {
+  border-color: var(--bad);
+  background: rgba(245, 114, 114, 0.16);
+}
+
+.gantt-block.overdue .gantt-block-time {
+  color: var(--bad);
 }
 
 .gantt-block.status-done {
+  border-color: var(--card-border);
+  background: var(--bg-elevated);
+  opacity: 0.55;
+}
+
+.gantt-block.status-done .gantt-block-time {
+  color: var(--text-faint);
+}
+
+/* Legend */
+.gantt-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.gantt-legend {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.legend-item .swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  border: 1px solid var(--card-border);
+  background: var(--card);
+  flex-shrink: 0;
+}
+.legend-item .swatch.in_progress {
   border-color: var(--good);
+  background: rgba(79, 208, 138, 0.5);
+}
+.legend-item .swatch.overdue {
+  border-color: var(--bad);
+  background: rgba(245, 114, 114, 0.5);
+}
+.legend-item .swatch.meeting {
+  border-color: var(--warn);
+  background: rgba(245, 184, 98, 0.5);
+}
+.legend-item .swatch.done {
+  background: var(--bg-elevated);
+  opacity: 0.6;
+}
+
+/* Status picker inside the edit popup */
+.modal-status-row {
+  display: flex;
+  gap: 6px;
+}
+
+.status-pick {
+  flex: 1;
+  padding: 7px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--card-border);
+  background: var(--bg-elevated);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.status-pick.active.pending {
+  border-color: var(--text-dim);
+  color: var(--text);
+}
+.status-pick.active.in_progress {
+  border-color: var(--good);
+  color: var(--good);
   background: rgba(79, 208, 138, 0.14);
-  opacity: 0.75;
+}
+.status-pick.active.done {
+  border-color: var(--text-faint);
+  color: var(--text-faint);
+}
+
+.btn-ghost.small.danger {
+  color: var(--bad);
+  border-color: rgba(245, 114, 114, 0.4);
+}
+.btn-ghost.small.danger:hover {
+  border-color: var(--bad);
 }
 
 .gantt-block.status-done .gantt-block-title {
@@ -1165,6 +1538,23 @@ textarea {
 
 .gantt-block.collab {
   border-left: 3px solid var(--warn);
+}
+
+/* Confirmed collab meeting — drawn on both teams' columns, not editable here. */
+.gantt-block.meeting {
+  border-color: var(--warn);
+  background: rgba(245, 184, 98, 0.18);
+  cursor: default;
+  z-index: 2;
+}
+
+.gantt-block.meeting .gantt-block-time,
+.gantt-block.meeting .gantt-block-title {
+  color: var(--warn);
+}
+
+.gantt-block.meeting .gantt-block-title {
+  font-weight: 700;
 }
 
 .gantt-now-line {
@@ -1432,38 +1822,85 @@ textarea {
   margin-bottom: 8px;
 }
 
-.collab-inline-fields {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+/* Collab card fields: time is owned by the receiving team, place/agenda by the sender */
+.collab-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
   margin-bottom: 8px;
 }
 
-.collab-inline-fields input[type="datetime-local"] {
+.collab-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.collab-field.wide {
+  grid-column: 1 / -1;
+}
+
+.collab-field-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-faint);
+}
+
+.collab-field-label em {
+  font-style: normal;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  padding: 1px 6px;
+  border-radius: 999px;
+  margin-left: 4px;
+  font-size: 10px;
+}
+
+.collab-field-value {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  padding: 6px 0;
+}
+
+.collab-field-value.empty {
+  color: var(--text-faint);
+  font-weight: 500;
+}
+
+.collab-field input,
+.collab-field select {
   background: var(--bg-elevated);
   border: 1px solid var(--card-border);
   border-radius: 7px;
-  padding: 6px 8px;
+  padding: 6px 9px;
   font-size: 12.5px;
   color: var(--text);
-  flex-shrink: 0;
+  min-width: 0;
+  width: 100%;
 }
 
-.collab-inline-fields input[type="text"] {
-  flex: 1;
-  min-width: 140px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--card-border);
-  border-radius: 7px;
-  padding: 6px 10px;
-  font-size: 12.5px;
-  color: var(--text);
-}
-
-.collab-inline-fields input:focus {
+.collab-field input:focus,
+.collab-field select:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+.collab-place-inputs {
+  display: flex;
+  gap: 6px;
+}
+
+.collab-place-inputs select {
+  flex: 0 0 auto;
+  width: auto;
+}
+
+@media (max-width: 720px) {
+  .collab-fields {
+    grid-template-columns: 1fr;
+  }
 }
 
 .collab-route {
@@ -1583,9 +2020,20 @@ textarea {
 
 /* Gantt drag-to-create */
 .gantt-hint {
-  margin: 0 0 10px;
-  font-size: 11.5px;
+  margin: 0;
+  font-size: 11px;
   color: var(--text-faint);
+}
+
+.gantt-block.dragging {
+  opacity: 0.85;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  cursor: grabbing;
+  z-index: 3;
+}
+
+.gantt-block:not(.meeting) {
+  cursor: grab;
 }
 
 .gantt-col-track {

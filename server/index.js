@@ -44,25 +44,7 @@ function isValidTimeStr(v) {
 
 const TASK_STATUSES = ["pending", "in_progress", "done"];
 
-function teamNameOf(teamId) {
-  return TEAMS.find((t) => t.id === teamId)?.name || teamId;
-}
-
-function extractHHMM(meetingTimeStr) {
-  if (typeof meetingTimeStr !== "string") return null;
-  const m = meetingTimeStr.match(/T(\d{2}):(\d{2})/);
-  if (!m) return null;
-  const hhmm = `${m[1]}:${m[2]}`;
-  return isValidTimeStr(hhmm) ? hhmm : null;
-}
-
-function addMinutesStr(hhmm, minutes) {
-  const [h, m] = hhmm.split(":").map(Number);
-  const total = (((h * 60 + m + minutes) % 1440) + 1440) % 1440;
-  const nh = String(Math.floor(total / 60)).padStart(2, "0");
-  const nm = String(total % 60).padStart(2, "0");
-  return `${nh}:${nm}`;
-}
+const PLACE_PLATFORMS = ["discord", "zep", "other"];
 
 io.on("connection", (socket) => {
   socket.emit("state:init", {
@@ -78,7 +60,7 @@ io.on("connection", (socket) => {
     io.emit("goal:update", goal);
   });
 
-  socket.on("task:create", ({ teamId, time, endTime, title, memo }, callback) => {
+  socket.on("task:create", ({ teamId, time, endTime, title, memo, assignee }, callback) => {
     const ack = typeof callback === "function" ? callback : () => {};
     if (!isValidTeam(teamId)) return ack(null);
     if (typeof title !== "string" || !title.trim()) return ack(null);
@@ -91,6 +73,7 @@ io.on("connection", (socket) => {
       endTime,
       title: title.trim().slice(0, 200),
       memo: typeof memo === "string" ? memo.slice(0, 500) : "",
+      assignee: typeof assignee === "string" ? assignee.trim().slice(0, 60) : "",
       subtasks: [],
       status: "pending",
       createdAt: new Date().toISOString(),
@@ -108,6 +91,7 @@ io.on("connection", (socket) => {
     if (isValidTimeStr(patch.endTime)) allowed.endTime = patch.endTime;
     if (typeof patch.memo === "string") allowed.memo = patch.memo.slice(0, 500);
     if (typeof patch.status === "string" && TASK_STATUSES.includes(patch.status)) allowed.status = patch.status;
+    if (typeof patch.assignee === "string") allowed.assignee = patch.assignee.trim().slice(0, 60);
     const updated = store.updateTask(id, allowed);
     if (updated) io.emit("task:update", updated);
   });
@@ -118,10 +102,24 @@ io.on("connection", (socket) => {
     if (removed) io.emit("task:delete", { id: removed.id });
   });
 
-  socket.on("task:subtask:add", ({ taskId, title }) => {
+  socket.on("task:subtask:add", ({ taskId, title, assignee }) => {
     if (typeof taskId !== "string" || typeof title !== "string" || !title.trim()) return;
-    const sub = { id: nanoid(8), title: title.trim().slice(0, 150), done: false };
+    const sub = {
+      id: nanoid(8),
+      title: title.trim().slice(0, 150),
+      assignee: typeof assignee === "string" ? assignee.trim().slice(0, 60) : "",
+      done: false,
+    };
     const updated = store.addSubtask(taskId, sub);
+    if (updated) io.emit("task:update", updated);
+  });
+
+  socket.on("task:subtask:update", ({ taskId, subtaskId, patch }) => {
+    if (typeof taskId !== "string" || typeof subtaskId !== "string" || !patch) return;
+    const allowed = {};
+    if (typeof patch.title === "string" && patch.title.trim()) allowed.title = patch.title.trim().slice(0, 150);
+    if (typeof patch.assignee === "string") allowed.assignee = patch.assignee.trim().slice(0, 60);
+    const updated = store.updateSubtask(taskId, subtaskId, allowed);
     if (updated) io.emit("task:update", updated);
   });
 
@@ -165,6 +163,9 @@ io.on("connection", (socket) => {
       toTeam,
       meetingTime: typeof meetingTime === "string" ? meetingTime.slice(0, 40) : "",
       agenda: typeof agenda === "string" ? agenda.trim().slice(0, 1000) : "",
+      // Place is chosen by the requesting team, time by the receiving team.
+      placePlatform: "",
+      placeRoom: "",
       requestedBy: typeof requestedBy === "string" ? requestedBy.slice(0, 100) : "",
       status: "pending",
       createdAt: new Date().toISOString(),
@@ -183,32 +184,23 @@ io.on("connection", (socket) => {
     }
     if (typeof patch.meetingTime === "string") allowed.meetingTime = patch.meetingTime.slice(0, 40);
     if (typeof patch.agenda === "string") allowed.agenda = patch.agenda.trim().slice(0, 1000);
-    if (typeof patch.suggestedTime === "string") allowed.suggestedTime = patch.suggestedTime.slice(0, 40);
     if (typeof patch.declineNote === "string") allowed.declineNote = patch.declineNote.trim().slice(0, 500);
+    if (typeof patch.placePlatform === "string" && (patch.placePlatform === "" || PLACE_PLATFORMS.includes(patch.placePlatform))) {
+      allowed.placePlatform = patch.placePlatform;
+    }
+    if (typeof patch.placeRoom === "string") allowed.placeRoom = patch.placeRoom.trim().slice(0, 60);
+
+    // The receiving team owns the time, and setting it IS the confirmation —
+    // clearing it drops the request back to pending.
+    if (typeof allowed.meetingTime === "string" && allowed.status === undefined) {
+      const nextStatus = allowed.meetingTime ? "confirmed" : "pending";
+      allowed.status = nextStatus;
+      allowed.respondedAt = allowed.meetingTime ? new Date().toISOString() : null;
+    }
+
     const updated = store.updateCollabRequest(id, allowed);
     if (!updated) return;
     io.emit("collab:update", updated);
-
-    if (allowed.status === "confirmed") {
-      const hhmm = extractHHMM(updated.meetingTime);
-      if (hhmm) {
-        const task = {
-          id: nanoid(10),
-          teamId: updated.toTeam,
-          date: store.todayStr(),
-          time: hhmm,
-          endTime: addMinutesStr(hhmm, 30),
-          title: updated.agenda ? updated.agenda.slice(0, 200) : `${teamNameOf(updated.fromTeam)} 협업 미팅`,
-          memo: `${teamNameOf(updated.fromTeam)}과의 협업 요청에서 자동 생성됨`,
-          subtasks: [],
-          collabWith: updated.fromTeam,
-          status: "pending",
-          createdAt: new Date().toISOString(),
-        };
-        store.addTask(task);
-        io.emit("task:create", task);
-      }
-    }
   });
 
   socket.on("collab:remind", ({ id }) => {
