@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useWorkflow } from "../store.jsx";
 import { BellIcon, TrashIcon } from "../components/Icons.jsx";
 import { playBell } from "../sound";
@@ -23,12 +23,22 @@ function formatMeetingTime(value) {
   return `${d.getMonth() + 1}월 ${d.getDate()}일(${days[d.getDay()]}) ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-function RequestCard({ req, teamName, myTeam, onConfirm, onDecline, onDelete, onRemind }) {
+function RequestCard({ req, teamName, myTeam, onConfirm, onDecline, onDelete, onRemind, onSchedule }) {
   const isMine = req.toTeam === myTeam;
+  const involvesMe = req.fromTeam === myTeam || req.toTeam === myTeam;
   const isPending = req.status === "pending";
+  const hasSchedule = Boolean(req.meetingTime);
+  const canEdit = involvesMe && isPending;
   const [declining, setDeclining] = useState(false);
   const [altTime, setAltTime] = useState(nowLocalInputValue);
   const [declineNote, setDeclineNote] = useState("");
+  const [timeDraft, setTimeDraft] = useState(req.meetingTime || "");
+  const [agendaDraft, setAgendaDraft] = useState(req.agenda || "");
+
+  useEffect(() => {
+    setTimeDraft(req.meetingTime || "");
+    setAgendaDraft(req.agenda || "");
+  }, [req.meetingTime, req.agenda]);
 
   function startDecline() {
     setAltTime(nowLocalInputValue());
@@ -39,6 +49,15 @@ function RequestCard({ req, teamName, myTeam, onConfirm, onDecline, onDelete, on
   function submitDecline() {
     onDecline(req.id, altTime, declineNote);
     setDeclining(false);
+  }
+
+  function commitTime(value) {
+    setTimeDraft(value);
+    onSchedule(req.id, value, agendaDraft);
+  }
+
+  function commitAgenda() {
+    if (agendaDraft !== (req.agenda || "")) onSchedule(req.id, timeDraft, agendaDraft);
   }
 
   return (
@@ -52,9 +71,32 @@ function RequestCard({ req, teamName, myTeam, onConfirm, onDecline, onDelete, on
         <span className={`status-badge ${req.status}`}>{STATUS_LABEL[req.status]}</span>
       </div>
 
-      <div className="collab-meeting-time">회의 예정: {formatMeetingTime(req.meetingTime)}</div>
-
-      {req.agenda && <div className="collab-agenda">{req.agenda}</div>}
+      {canEdit ? (
+        <div className="collab-inline-fields">
+          <input
+            type="datetime-local"
+            value={timeDraft}
+            onChange={(e) => commitTime(e.target.value)}
+            title="회의 시간"
+          />
+          <input
+            type="text"
+            value={agendaDraft}
+            onChange={(e) => setAgendaDraft(e.target.value)}
+            onBlur={commitAgenda}
+            placeholder="어떤 안건으로 볼까요?"
+            maxLength={1000}
+          />
+        </div>
+      ) : (
+        <>
+          <div className="collab-meeting-time">
+            회의 예정: {formatMeetingTime(req.meetingTime)}
+            {!hasSchedule && isPending && <span className="collab-unscheduled-tag">일정 미정</span>}
+          </div>
+          {req.agenda && <div className="collab-agenda">{req.agenda}</div>}
+        </>
+      )}
 
       {req.status === "declined" && (
         <div className="collab-decline-note">
@@ -93,7 +135,7 @@ function RequestCard({ req, teamName, myTeam, onConfirm, onDecline, onDelete, on
           {req.remindCount > 0 && ` · 재알림 ${req.remindCount}회`}
         </span>
         <div className="collab-actions">
-          {isPending && isMine && !declining && (
+          {canEdit && isMine && hasSchedule && !declining && (
             <>
               <button className="btn-primary small" onClick={() => onConfirm(req.id)}>
                 확정
@@ -103,7 +145,7 @@ function RequestCard({ req, teamName, myTeam, onConfirm, onDecline, onDelete, on
               </button>
             </>
           )}
-          {isPending && !isMine && (
+          {canEdit && !isMine && (
             <button className="btn-ghost small" onClick={() => onRemind(req.id)} title="상대 팀에게 다시 종을 울립니다">
               다시 알림
             </button>
@@ -118,104 +160,70 @@ function RequestCard({ req, teamName, myTeam, onConfirm, onDecline, onDelete, on
 }
 
 export default function Collab() {
-  const { teams, teamName, myTeam, collabRequests, createCollab, updateCollab, deleteCollab, remindCollab } =
-    useWorkflow();
-  const [formOpen, setFormOpen] = useState(false);
-  const [fromTeam, setFromTeam] = useState(myTeam || "");
-  const [toTeam, setToTeam] = useState("");
-  const [meetingTime, setMeetingTime] = useState(nowLocalInputValue);
-  const [agenda, setAgenda] = useState("");
+  const {
+    teams,
+    teamName,
+    myTeam,
+    isLeader,
+    collabRequests,
+    createCollab,
+    updateCollab,
+    deleteCollab,
+    remindCollab,
+    triggerTeamAlert,
+  } = useWorkflow();
 
-  const sorted = useMemo(
-    () => collabRequests.slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
-    [collabRequests]
+  const scopedRequests = useMemo(
+    () =>
+      isLeader ? collabRequests : collabRequests.filter((r) => r.fromTeam === myTeam || r.toTeam === myTeam),
+    [collabRequests, isLeader, myTeam]
   );
 
-  function openForm() {
-    setFromTeam(myTeam || "");
-    setMeetingTime(nowLocalInputValue());
-    setFormOpen(true);
-  }
+  const sorted = useMemo(
+    () => scopedRequests.slice().sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
+    [scopedRequests]
+  );
 
-  function submit(e) {
-    e.preventDefault();
-    if (!fromTeam || !toTeam || fromTeam === toTeam) return;
-    createCollab(fromTeam, toTeam, meetingTime, agenda);
+  function ringBellFor(teamId) {
+    if (!myTeam) {
+      triggerTeamAlert();
+      return;
+    }
+    if (teamId === myTeam) return;
+    createCollab(myTeam, teamId, "", "");
     playBell();
-    setToTeam("");
-    setMeetingTime(nowLocalInputValue());
-    setAgenda("");
-    setFormOpen(false);
   }
 
   return (
-    <div className="page">
+    <div className="page collab-page">
       <div className="page-head collab-head">
         <div>
           <h2>협업 요청 &amp; 회의 조율</h2>
-          <p className="page-sub">다른 팀과 협업이 필요하면 종을 울리고, 회의 시간과 안건을 조율하세요</p>
+          <p className="page-sub">
+            {isLeader
+              ? "협업이 필요한 팀의 종을 울려보세요. 팀장으로서 모든 팀의 협업 요청 현황도 함께 볼 수 있습니다."
+              : "협업이 필요한 팀의 종을 울려보세요. 시간과 안건은 카드에서 바로 적으면 됩니다."}
+          </p>
         </div>
-        <button className="btn-bell" onClick={openForm}>
-          <BellIcon size={18} />
-          종 울리기
-        </button>
       </div>
 
-      {formOpen && (
-        <form className="collab-form" onSubmit={submit}>
-          <div className="collab-form-row">
-            <label>
-              보내는 팀
-              <select value={fromTeam} onChange={(e) => setFromTeam(e.target.value)} required>
-                <option value="">선택</option>
-                {teams.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <span className="route-arrow">→</span>
-            <label>
-              받는 팀
-              <select value={toTeam} onChange={(e) => setToTeam(e.target.value)} required>
-                <option value="">선택</option>
-                {teams.filter((t) => t.id !== fromTeam).map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              희망 회의 시간
-              <input
-                type="datetime-local"
-                value={meetingTime}
-                onChange={(e) => setMeetingTime(e.target.value)}
-              />
-            </label>
-          </div>
-          <label className="agenda-label">
-            어떤 내용을 논의할까요?
-            <textarea
-              value={agenda}
-              onChange={(e) => setAgenda(e.target.value)}
-              placeholder="안건, 질문하고 싶은 내용을 적어주세요"
-              rows={3}
-              maxLength={1000}
-            />
-          </label>
-          <div className="collab-form-actions">
-            <button type="button" className="btn-ghost" onClick={() => setFormOpen(false)}>
-              취소
+      <div className="bell-grid">
+        {teams.map((team) => {
+          const isMe = team.id === myTeam;
+          return (
+            <button
+              key={team.id}
+              className={`team-bell-btn ${isMe ? "is-me" : ""}`}
+              onClick={() => ringBellFor(team.id)}
+              disabled={isMe}
+              title={isMe ? "내 팀" : `${team.name} 종 울리기`}
+            >
+              <BellIcon size={isMe ? 16 : 22} />
+              <span>{team.name}</span>
             </button>
-            <button type="submit" className="btn-primary">
-              요청 보내기
-            </button>
-          </div>
-        </form>
-      )}
+          );
+        })}
+      </div>
 
       <div className="collab-list">
         {sorted.length === 0 && <div className="empty-hint">아직 협업 요청이 없습니다</div>}
@@ -234,6 +242,7 @@ export default function Collab() {
               remindCollab(id);
               playBell();
             }}
+            onSchedule={(id, meetingTime, agenda) => updateCollab(id, { meetingTime, agenda })}
           />
         ))}
       </div>

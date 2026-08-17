@@ -4,13 +4,27 @@
   "private": true,
   "type": "commonjs",
   "main": "index.js",
+  "bin": "index.js",
   "scripts": {
-    "dev": "node index.js"
+    "dev": "node index.js",
+    "package": "node scripts/build-exe.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "nanoid": "^3.3.7",
     "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "@yao-pkg/pkg": "^6.22.0"
+  },
+  "pkg": {
+    "assets": [
+      "bin/cloudflared.exe",
+      "public/**/*"
+    ],
+    "targets": [
+      "node22-win-x64"
+    ]
   }
 }

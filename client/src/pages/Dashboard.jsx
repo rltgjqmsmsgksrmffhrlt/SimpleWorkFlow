@@ -27,7 +27,7 @@ export default function Dashboard({ onNavigate }) {
   const teamStats = useMemo(() => {
     return teams.map((t) => {
       const teamTasks = tasks.filter((task) => task.teamId === t.id);
-      const done = teamTasks.filter((task) => task.done).length;
+      const done = teamTasks.filter((task) => task.status === "done").length;
       return { ...t, total: teamTasks.length, done };
     });
   }, [teams, tasks]);

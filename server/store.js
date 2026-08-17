@@ -1,7 +1,11 @@
 const fs = require("fs");
 const path = require("path");
+const { baseDir } = require("./paths");
 
-const DATA_FILE = path.join(__dirname, "data.json");
+const DATA_FILE = path.join(baseDir, "data.json");
+
+const DAY_START = "09:00";
+const DAY_END = "17:50";
 
 function todayStr() {
   const d = new Date();
@@ -19,6 +23,15 @@ function emptyState() {
   };
 }
 
+// Backfill fields that may be missing on tasks created before subtasks/status existed.
+function migrateTasks(tasks) {
+  for (const t of tasks) {
+    if (!Array.isArray(t.subtasks)) t.subtasks = [];
+    if (!t.status) t.status = t.done ? "done" : "pending";
+  }
+  return tasks;
+}
+
 function load() {
   if (!fs.existsSync(DATA_FILE)) {
     const initial = emptyState();
@@ -28,11 +41,14 @@ function load() {
   try {
     const raw = fs.readFileSync(DATA_FILE, "utf-8");
     const parsed = JSON.parse(raw);
-    return {
+    const loaded = {
       goal: parsed.goal || emptyState().goal,
       tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [],
       collabRequests: Array.isArray(parsed.collabRequests) ? parsed.collabRequests : [],
     };
+    migrateTasks(loaded.tasks);
+    fs.writeFileSync(DATA_FILE, JSON.stringify(loaded, null, 2), "utf-8");
+    return loaded;
   } catch (err) {
     console.error("Failed to read data.json, starting fresh:", err.message);
     return emptyState();
@@ -75,10 +91,38 @@ function updateTask(id, patch) {
 }
 
 function deleteTask(id) {
-  const before = state.tasks.length;
-  state.tasks = state.tasks.filter((t) => t.id !== id);
+  const idx = state.tasks.findIndex((t) => t.id === id);
+  if (idx === -1) return null;
+  const [removed] = state.tasks.splice(idx, 1);
   save();
-  return state.tasks.length !== before;
+  return removed;
+}
+
+function addSubtask(taskId, subtask) {
+  const t = state.tasks.find((x) => x.id === taskId);
+  if (!t) return null;
+  if (!Array.isArray(t.subtasks)) t.subtasks = [];
+  t.subtasks.push(subtask);
+  save();
+  return t;
+}
+
+function toggleSubtask(taskId, subtaskId) {
+  const t = state.tasks.find((x) => x.id === taskId);
+  if (!t || !Array.isArray(t.subtasks)) return null;
+  const s = t.subtasks.find((x) => x.id === subtaskId);
+  if (!s) return null;
+  s.done = !s.done;
+  save();
+  return t;
+}
+
+function deleteSubtask(taskId, subtaskId) {
+  const t = state.tasks.find((x) => x.id === taskId);
+  if (!t || !Array.isArray(t.subtasks)) return null;
+  t.subtasks = t.subtasks.filter((x) => x.id !== subtaskId);
+  save();
+  return t;
 }
 
 function addCollabRequest(reqObj) {
@@ -116,12 +160,17 @@ function remindCollabRequest(id) {
 }
 
 module.exports = {
+  DAY_START,
+  DAY_END,
   todayStr,
   getState,
   setGoal,
   addTask,
   updateTask,
   deleteTask,
+  addSubtask,
+  toggleSubtask,
+  deleteSubtask,
   addCollabRequest,
   updateCollabRequest,
   deleteCollabRequest,

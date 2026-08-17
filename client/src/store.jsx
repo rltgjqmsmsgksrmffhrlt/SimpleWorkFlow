@@ -11,9 +11,13 @@ export function WorkflowProvider({ children }) {
   const [goal, setGoalState] = useState({ content: "", updatedBy: "", updatedAt: null, date: "" });
   const [tasks, setTasks] = useState([]);
   const [collabRequests, setCollabRequests] = useState([]);
+  const [dayStart, setDayStart] = useState("09:00");
+  const [dayEnd, setDayEnd] = useState("17:50");
 
   const [myTeam, setMyTeamState] = useState(() => localStorage.getItem("swf_myTeam") || "");
   const [myName, setMyNameState] = useState(() => localStorage.getItem("swf_myName") || "");
+  const [incomingAlerts, setIncomingAlerts] = useState([]);
+  const [teamAlert, setTeamAlert] = useState(false);
 
   const myTeamRef = useRef(myTeam);
   useEffect(() => {
@@ -39,6 +43,8 @@ export function WorkflowProvider({ children }) {
       setGoalState(state.goal || {});
       setTasks(state.tasks || []);
       setCollabRequests(state.collabRequests || []);
+      if (state.dayStart) setDayStart(state.dayStart);
+      if (state.dayEnd) setDayEnd(state.dayEnd);
     }
     function onConnect() {
       setConnected(true);
@@ -60,7 +66,10 @@ export function WorkflowProvider({ children }) {
     }
     function onCollabCreate(r) {
       setCollabRequests((prev) => [...prev, r]);
-      if (r.toTeam === myTeamRef.current) playBell();
+      if (r.toTeam === myTeamRef.current) {
+        playBell();
+        setIncomingAlerts((prev) => [...prev, r]);
+      }
     }
     function onCollabUpdate(r) {
       setCollabRequests((prev) => prev.map((x) => (x.id === r.id ? r : x)));
@@ -109,10 +118,21 @@ export function WorkflowProvider({ children }) {
     localStorage.setItem("swf_myName", name);
   }, []);
 
+  const dismissAlert = useCallback((id) => {
+    setIncomingAlerts((prev) => prev.filter((r) => r.id !== id));
+  }, []);
+
+  const triggerTeamAlert = useCallback(() => {
+    setTeamAlert(true);
+    setTimeout(() => setTeamAlert(false), 1800);
+  }, []);
+
   const teamName = useCallback(
     (id) => teams.find((t) => t.id === id)?.name || id,
     [teams]
   );
+
+  const isLeader = myTeam === "management";
 
   const whoAmI = useMemo(() => {
     const label = myName?.trim() ? myName.trim() : "";
@@ -121,13 +141,20 @@ export function WorkflowProvider({ children }) {
     return label || team || "익명";
   }, [myName, myTeam, teamName]);
 
+  const identityChosen = Boolean(myTeam);
+
   const actions = useMemo(
     () => ({
       setGoal: (content) => socket.emit("goal:set", { content, updatedBy: whoAmI }),
       createTask: (teamId, time, endTime, title, memo) =>
-        socket.emit("task:create", { teamId, time, endTime, title, memo }),
+        new Promise((resolve) => {
+          socket.emit("task:create", { teamId, time, endTime, title, memo }, (task) => resolve(task));
+        }),
       updateTask: (id, patch) => socket.emit("task:update", { id, patch }),
       deleteTask: (id) => socket.emit("task:delete", { id }),
+      addSubtask: (taskId, title) => socket.emit("task:subtask:add", { taskId, title }),
+      toggleSubtask: (taskId, subtaskId) => socket.emit("task:subtask:toggle", { taskId, subtaskId }),
+      deleteSubtask: (taskId, subtaskId) => socket.emit("task:subtask:delete", { taskId, subtaskId }),
       createCollab: (fromTeam, toTeam, meetingTime, agenda) =>
         socket.emit("collab:create", { fromTeam, toTeam, meetingTime, agenda, requestedBy: whoAmI }),
       updateCollab: (id, patch) => socket.emit("collab:update", { id, patch }),
@@ -154,12 +181,20 @@ export function WorkflowProvider({ children }) {
     goal: todayGoal,
     tasks: todayTasks,
     collabRequests: todayCollabRequests,
+    dayStart,
+    dayEnd,
     myTeam,
     myName,
+    isLeader,
+    identityChosen,
     setMyTeam,
     setMyName,
     teamName,
     whoAmI,
+    incomingAlerts,
+    dismissAlert,
+    teamAlert,
+    triggerTeamAlert,
     ...actions,
   };
 
