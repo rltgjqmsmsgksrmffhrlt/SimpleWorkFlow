@@ -8,6 +8,8 @@ const WorkflowContext = createContext(null);
 export function WorkflowProvider({ children }) {
   const [connected, setConnected] = useState(socket.connected);
   const [teams, setTeams] = useState([]);
+  const [members, setMembers] = useState([]);
+  const [boardColumns, setBoardColumns] = useState({});
   const [goal, setGoalState] = useState({ content: "", updatedBy: "", updatedAt: null, date: "" });
   const [tasks, setTasks] = useState([]);
   const [collabRequests, setCollabRequests] = useState([]);
@@ -40,6 +42,8 @@ export function WorkflowProvider({ children }) {
   useEffect(() => {
     function onInit(state) {
       setTeams(state.teams || []);
+      if (Array.isArray(state.members)) setMembers(state.members);
+      setBoardColumns(state.boardColumns || {});
       setGoalState(state.goal || {});
       setTasks(state.tasks || []);
       setCollabRequests(state.collabRequests || []);
@@ -77,6 +81,9 @@ export function WorkflowProvider({ children }) {
     function onCollabDelete({ id }) {
       setCollabRequests((prev) => prev.filter((x) => x.id !== id));
     }
+    function onBoardColumns(next) {
+      setBoardColumns(next || {});
+    }
     function onCollabRemind({ toTeam }) {
       if (toTeam === myTeamRef.current) playBell();
     }
@@ -92,6 +99,7 @@ export function WorkflowProvider({ children }) {
     socket.on("collab:update", onCollabUpdate);
     socket.on("collab:delete", onCollabDelete);
     socket.on("collab:remind", onCollabRemind);
+    socket.on("board:columns", onBoardColumns);
 
     return () => {
       socket.off("connect", onConnect);
@@ -105,6 +113,7 @@ export function WorkflowProvider({ children }) {
       socket.off("collab:update", onCollabUpdate);
       socket.off("collab:delete", onCollabDelete);
       socket.off("collab:remind", onCollabRemind);
+      socket.off("board:columns", onBoardColumns);
     };
   }, []);
 
@@ -146,10 +155,11 @@ export function WorkflowProvider({ children }) {
   const actions = useMemo(
     () => ({
       setGoal: (content) => socket.emit("goal:set", { content, updatedBy: whoAmI }),
-      createTask: (teamId, time, endTime, title, memo, assignee) =>
+      createTask: (teamId, time, endTime, title, memo, assignee, column) =>
         new Promise((resolve) => {
-          socket.emit("task:create", { teamId, time, endTime, title, memo, assignee }, (task) => resolve(task));
+          socket.emit("task:create", { teamId, time, endTime, title, memo, assignee, column }, (task) => resolve(task));
         }),
+      setTeamColumns: (teamId, count) => socket.emit("board:columns:set", { teamId, count }),
       updateTask: (id, patch) => socket.emit("task:update", { id, patch }),
       deleteTask: (id) => socket.emit("task:delete", { id }),
       addSubtask: (taskId, title, assignee) => socket.emit("task:subtask:add", { taskId, title, assignee }),
@@ -179,6 +189,8 @@ export function WorkflowProvider({ children }) {
   const value = {
     connected,
     teams,
+    members,
+    boardColumns,
     goal: todayGoal,
     tasks: todayTasks,
     collabRequests: todayCollabRequests,

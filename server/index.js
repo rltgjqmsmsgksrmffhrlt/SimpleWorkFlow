@@ -8,6 +8,7 @@ const { Server } = require("socket.io");
 const { nanoid } = require("nanoid");
 
 const { TEAMS } = require("./teams");
+const { MEMBERS } = require("./members");
 const store = require("./store");
 const { baseDir } = require("./paths");
 
@@ -24,6 +25,38 @@ app.get("/api/health", (_req, res) => {
 
 app.get("/api/teams", (_req, res) => {
   res.json(TEAMS);
+});
+
+app.get("/api/members", (_req, res) => {
+  res.json(MEMBERS);
+});
+
+// The WBS is maintained elsewhere and dropped into a WBS folder next to the exe
+// as JSON. It is read straight off disk (newest file wins) so updating the plan
+// never needs a rebuild — and it is served read-only; editing happens upstream.
+const WBS_DIR = path.join(baseDir, "WBS");
+
+function readLatestWbs() {
+  if (!fs.existsSync(WBS_DIR)) return { error: "no-folder" };
+  const files = fs
+    .readdirSync(WBS_DIR)
+    .filter((f) => f.toLowerCase().endsWith(".json"))
+    .map((f) => {
+      const full = path.join(WBS_DIR, f);
+      return { name: f, full, mtime: fs.statSync(full).mtimeMs };
+    })
+    .sort((a, b) => b.mtime - a.mtime);
+  if (files.length === 0) return { error: "no-file" };
+  try {
+    const data = JSON.parse(fs.readFileSync(files[0].full, "utf-8"));
+    return { data, sourceFile: files[0].name, updatedAt: new Date(files[0].mtime).toISOString() };
+  } catch (err) {
+    return { error: "parse-failed", detail: err.message, sourceFile: files[0].name };
+  }
+}
+
+app.get("/api/wbs", (_req, res) => {
+  res.json(readLatestWbs());
 });
 
 const clientDist = path.join(__dirname, "public");
@@ -49,7 +82,9 @@ const PLACE_PLATFORMS = ["discord", "zep", "other"];
 io.on("connection", (socket) => {
   socket.emit("state:init", {
     teams: TEAMS,
+    members: MEMBERS,
     dayStart: store.DAY_START,
+    boardColumns: store.getState().boardColumns || {},
     dayEnd: store.DAY_END,
     ...store.getState(),
   });
@@ -60,7 +95,7 @@ io.on("connection", (socket) => {
     io.emit("goal:update", goal);
   });
 
-  socket.on("task:create", ({ teamId, time, endTime, title, memo, assignee }, callback) => {
+  socket.on("task:create", ({ teamId, time, endTime, title, memo, assignee, column }, callback) => {
     const ack = typeof callback === "function" ? callback : () => {};
     if (!isValidTeam(teamId)) return ack(null);
     if (typeof title !== "string" || !title.trim()) return ack(null);
@@ -74,6 +109,7 @@ io.on("connection", (socket) => {
       title: title.trim().slice(0, 200),
       memo: typeof memo === "string" ? memo.slice(0, 500) : "",
       assignee: typeof assignee === "string" ? assignee.trim().slice(0, 60) : "",
+      column: Number.isInteger(column) && column >= 0 ? column : 0,
       subtasks: [],
       status: "pending",
       createdAt: new Date().toISOString(),
@@ -92,8 +128,18 @@ io.on("connection", (socket) => {
     if (typeof patch.memo === "string") allowed.memo = patch.memo.slice(0, 500);
     if (typeof patch.status === "string" && TASK_STATUSES.includes(patch.status)) allowed.status = patch.status;
     if (typeof patch.assignee === "string") allowed.assignee = patch.assignee.trim().slice(0, 60);
+    if (Number.isInteger(patch.column) && patch.column >= 0) allowed.column = patch.column;
     const updated = store.updateTask(id, allowed);
     if (updated) io.emit("task:update", updated);
+  });
+
+  socket.on("board:columns:set", ({ teamId, count }) => {
+    if (!isValidTeam(teamId) || typeof count !== "number") return;
+    // Never drop a column that still holds work.
+    const used = store.getState().tasks.filter((t) => t.teamId === teamId).map((t) => t.column || 0);
+    const minNeeded = used.length ? Math.max(...used) + 1 : 1;
+    const next = Math.max(count, minNeeded);
+    io.emit("board:columns", store.setBoardColumns(teamId, next));
   });
 
   socket.on("task:delete", ({ id }) => {
@@ -276,7 +322,7 @@ function readNgrokDomain() {
   return domain;
 }
 
-function startQuickTunnel(port) {
+function startQuickTunnel(port, onReady) {
   const dest = path.join(baseDir, "cloudflared.exe");
   if (!fs.existsSync(dest)) {
     fs.writeFileSync(dest, fs.readFileSync(path.join(__dirname, "bin", "cloudflared.exe")));
@@ -289,6 +335,7 @@ function startQuickTunnel(port) {
     if (match) {
       announced = true;
       announceUrl(match[0], false);
+      onReady(match[0]);
     }
   };
   child.stdout.on("data", onOutput);
@@ -297,7 +344,7 @@ function startQuickTunnel(port) {
   return child;
 }
 
-function startNgrokTunnel(port, domain, onUnavailable) {
+function startNgrokTunnel(port, domain, onReady, onUnavailable) {
   // shell:true so the Microsoft Store app-execution alias resolves off PATH.
   const child = spawn("ngrok", ["http", `--url=${domain}`, String(port), "--log", "stdout"], {
     shell: true,
@@ -316,6 +363,7 @@ function startNgrokTunnel(port, domain, onUnavailable) {
     if (!settled && /url=https:\/\//.test(text)) {
       settled = true;
       announceUrl(`https://${domain}`, true);
+      onReady(`https://${domain}`);
       return;
     }
     const err = text.match(/ERR_NGROK_\d+|ERROR:.*/);
@@ -331,15 +379,15 @@ function startNgrokTunnel(port, domain, onUnavailable) {
   return child;
 }
 
-function startTunnel(port) {
+function startTunnel(port, onReady) {
   const domain = readNgrokDomain();
   if (domain) {
-    startNgrokTunnel(port, domain, () => startQuickTunnel(port));
+    startNgrokTunnel(port, domain, onReady, () => startQuickTunnel(port, onReady));
     return;
   }
   console.log(`\n[알림] ${NGROK_DOMAIN_FILE} 에 고정 도메인을 적으면 항상 같은 주소를 쓸 수 있습니다.`);
   console.log(NGROK_SETUP_HELP + "\n");
-  startQuickTunnel(port);
+  startQuickTunnel(port, onReady);
 }
 
 function openBrowser(url) {
@@ -349,8 +397,16 @@ function openBrowser(url) {
 server.listen(PORT, () => {
   const localUrl = `http://localhost:${PORT}`;
   console.log(`SimpleWorkFlow server listening on ${localUrl}`);
-  if (process.pkg) {
-    startTunnel(PORT);
-    openBrowser(localUrl);
-  }
+  if (!process.pkg) return;
+
+  // Open the address people actually share, not localhost — but never leave the
+  // user staring at nothing if the tunnel is slow or fails.
+  let opened = false;
+  const openOnce = (url) => {
+    if (opened) return;
+    opened = true;
+    openBrowser(url);
+  };
+  startTunnel(PORT, openOnce);
+  setTimeout(() => openOnce(localUrl), 20000);
 });

@@ -20,6 +20,9 @@ function emptyState() {
     goal: { date: todayStr(), content: "", updatedBy: "", updatedAt: null },
     tasks: [],
     collabRequests: [],
+    // How many parallel columns each course shows. Stored so an empty column
+    // someone just added survives a reload.
+    boardColumns: {},
   };
 }
 
@@ -29,6 +32,7 @@ function migrateTasks(tasks) {
     if (!Array.isArray(t.subtasks)) t.subtasks = [];
     if (!t.status) t.status = t.done ? "done" : "pending";
     if (typeof t.assignee !== "string") t.assignee = "";
+    if (typeof t.column !== "number" || t.column < 0) t.column = 0;
     for (const s of t.subtasks) {
       if (typeof s.assignee !== "string") s.assignee = "";
     }
@@ -49,6 +53,7 @@ function load() {
       goal: parsed.goal || emptyState().goal,
       tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [],
       collabRequests: Array.isArray(parsed.collabRequests) ? parsed.collabRequests : [],
+      boardColumns: parsed.boardColumns && typeof parsed.boardColumns === "object" ? parsed.boardColumns : {},
     };
     migrateTasks(loaded.tasks);
     fs.writeFileSync(DATA_FILE, JSON.stringify(loaded, null, 2), "utf-8");
@@ -160,6 +165,13 @@ function deleteCollabRequest(id) {
   return state.collabRequests.length !== before;
 }
 
+function setBoardColumns(teamId, count) {
+  const n = Math.max(1, Math.min(6, Math.round(count)));
+  state.boardColumns = { ...state.boardColumns, [teamId]: n };
+  save();
+  return state.boardColumns;
+}
+
 function remindCollabRequest(id) {
   const idx = state.collabRequests.findIndex((r) => r.id === id);
   if (idx === -1) return null;
@@ -190,4 +202,5 @@ module.exports = {
   updateCollabRequest,
   deleteCollabRequest,
   remindCollabRequest,
+  setBoardColumns,
 };

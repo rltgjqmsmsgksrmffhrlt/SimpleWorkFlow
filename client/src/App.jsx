@@ -5,10 +5,12 @@ import { primeAudio } from "./sound";
 import Dashboard from "./pages/Dashboard.jsx";
 import TeamBoard from "./pages/TeamBoard.jsx";
 import Collab from "./pages/Collab.jsx";
+import Wbs from "./pages/Wbs.jsx";
 
 const TABS = [
   { key: "dashboard", label: "대시보드" },
-  { key: "board", label: "팀 보드" },
+  { key: "board", label: "오늘 일정" },
+  { key: "wbs", label: "WBS" },
   { key: "collab", label: "협업 요청" },
 ];
 
@@ -190,6 +192,7 @@ export default function App() {
       <main className="content">
         {tab === "dashboard" && <Dashboard onNavigate={setTab} />}
         {tab === "board" && <TeamBoard />}
+        {tab === "wbs" && <Wbs />}
         {tab === "collab" && <Collab />}
       </main>
     </div>

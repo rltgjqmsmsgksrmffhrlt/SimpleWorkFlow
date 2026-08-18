@@ -1150,11 +1150,21 @@ textarea {
 }
 
 .ap-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas:
+    "check title del"
+    ".     owner owner";
   align-items: center;
-  gap: 5px;
-  padding-left: 4px;
+  gap: 2px 5px;
+  padding: 2px 0 3px 4px;
 }
+
+.ap-row > .ap-check { grid-area: check; }
+.ap-row > .ap-sub-title { grid-area: title; }
+.ap-row > .ap-row-label { grid-area: title; }
+.ap-row > .ap-assignee { grid-area: owner; }
+.ap-row > .ap-del { grid-area: del; }
 
 .ap-row-label {
   font-size: 11px;
@@ -1198,12 +1208,12 @@ textarea {
 }
 
 .ap-assignee {
-  width: 84px;
-  flex-shrink: 0;
+  width: 100%;
+  min-width: 0;
   background: var(--bg-elevated);
   border: 1px solid var(--card-border);
   border-radius: 6px;
-  padding: 3px 6px;
+  padding: 3px 4px;
   font-size: 11px;
   color: var(--text);
 }
@@ -1306,6 +1316,213 @@ textarea {
 .gantt-col-track {
   position: relative;
   z-index: 1;
+}
+
+/* WBS weekly view (read-only) */
+.wbs-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.wbs-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-shrink: 0;
+  margin-bottom: 10px;
+}
+
+.wbs-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wbs-weeklabel {
+  flex-shrink: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wbs-thisweek {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 10.5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.wbs-grid {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+}
+
+.wbs-head-row {
+  display: flex;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--card-border);
+  padding-bottom: 4px;
+}
+
+.wbs-part-col {
+  width: 96px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 8px;
+}
+
+.wbs-day-head {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 2px 0;
+  border-radius: 5px;
+}
+
+.wbs-day-head.weekend .wbs-dow,
+.wbs-day-head.weekend .wbs-date {
+  color: var(--text-faint);
+}
+
+.wbs-day-head.today {
+  background: var(--accent-soft);
+}
+
+.wbs-dow {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.wbs-date {
+  font-size: 10px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.wbs-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.wbs-part-row {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid rgba(42, 52, 80, 0.5);
+}
+
+.wbs-part-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.wbs-part-name {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wbs-part-count {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.wbs-lanes {
+  flex: 1;
+  position: relative;
+  min-width: 0;
+}
+
+.wbs-daycell {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid rgba(42, 52, 80, 0.5);
+}
+
+.wbs-daycell.weekend {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.wbs-daycell.today {
+  background: var(--accent-soft);
+}
+
+.wbs-bar {
+  position: absolute;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid var(--card-border);
+  border-left-width: 3px;
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  padding: 0 5px;
+  overflow: hidden;
+  cursor: default;
+}
+
+.wbs-bar.clip-l {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.wbs-bar.clip-r {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.wbs-bar-title {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wbs-bar.status-doing {
+  background: rgba(79, 208, 138, 0.16);
+  border-color: var(--good);
+}
+
+.wbs-bar.status-done {
+  opacity: 0.5;
+}
+
+.wbs-bar.status-done .wbs-bar-title {
+  text-decoration: line-through;
+}
+
+.empty-hint.small {
+  padding: 14px;
+  font-size: 12px;
 }
 
 /* Missing-owner marker on a chart block */
@@ -2189,4 +2406,286 @@ textarea {
   .goal-hero {
     padding: 24px;
   }
+}
+
+/* Paste-to-add modal: source on the left, what we understood on the right */
+.modal-card.wide {
+  max-width: 860px;
+  width: 92vw;
+}
+
+.paste-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  padding: 0 18px;
+  min-height: 0;
+}
+
+.paste-left {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.paste-input {
+  height: 300px;
+  resize: none;
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--text);
+  font-family: inherit;
+}
+.paste-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.paste-tip {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-faint);
+  line-height: 1.5;
+}
+
+.paste-right {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.paste-preview {
+  height: 300px;
+  overflow-y: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.paste-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  min-width: 0;
+}
+
+.paste-row.task {
+  background: var(--card);
+}
+
+.paste-row.subtask {
+  padding-left: 22px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+
+.paste-row.skip {
+  color: var(--text-faint);
+  justify-content: space-between;
+}
+
+.paste-time {
+  flex-shrink: 0;
+  font-weight: 700;
+  color: var(--accent-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.paste-time em {
+  font-style: normal;
+  font-size: 9.5px;
+  color: var(--warn);
+  margin-left: 4px;
+}
+
+.paste-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.paste-skip-tag {
+  flex-shrink: 0;
+  font-size: 9.5px;
+  font-weight: 700;
+  color: var(--bad);
+}
+
+.paste-actions {
+  align-items: center;
+  padding: 14px 18px 18px;
+}
+
+.paste-count {
+  margin-right: auto;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.gantt-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Drag/scroll time wheel — typing stays available underneath */
+.time-wheel {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 4px 6px;
+}
+
+.tw-part {
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  padding: 2px 5px;
+  border-radius: 5px;
+  cursor: ns-resize;
+  user-select: none;
+}
+
+.tw-part:hover {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.tw-sep {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-faint);
+}
+
+/* Sits under the digits so a click still opens the native picker for typing. */
+.tw-native {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+  padding: 0;
+  pointer-events: none;
+}
+
+/* Resize grips on a chart block */
+.gantt-resize {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: ns-resize;
+  z-index: 2;
+}
+
+.gantt-resize.top {
+  top: 0;
+}
+
+.gantt-resize.bottom {
+  bottom: 0;
+}
+
+.gantt-block:hover .gantt-resize {
+  background: linear-gradient(var(--accent), transparent);
+  opacity: 0.5;
+}
+
+.gantt-block:hover .gantt-resize.bottom {
+  background: linear-gradient(transparent, var(--accent));
+}
+
+/* One course split into parallel columns: fixed width, left-aligned, so a
+   single course does not stretch one column across the whole screen. */
+.gantt-header.narrow,
+.gantt-body {
+  align-items: stretch;
+}
+
+.gantt-header.narrow .gantt-col-head,
+.gantt-col-track.narrow {
+  flex: 0 0 200px;
+  width: 200px;
+}
+
+.col-add,
+.col-remove {
+  background: transparent;
+  border: 1px dashed var(--card-border);
+  color: var(--text-faint);
+  cursor: pointer;
+  border-radius: 6px;
+  line-height: 1;
+}
+
+.col-add {
+  align-self: center;
+  width: 26px;
+  height: 26px;
+  font-size: 15px;
+  margin-left: 8px;
+  flex-shrink: 0;
+}
+
+.col-add:hover {
+  border-style: solid;
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.col-remove {
+  border: none;
+  margin-left: 4px;
+  padding: 0 3px;
+  font-size: 12px;
+}
+
+.col-remove:hover {
+  color: var(--bad);
+}
+
+/* Markdown export preview */
+.export-body {
+  padding: 0 18px;
+}
+
+.export-text {
+  width: 100%;
+  height: 340px;
+  resize: none;
+  background: var(--bg-elevated);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.65;
+  color: var(--text);
+  white-space: pre;
+  overflow: auto;
+}
+
+.export-text:focus {
+  outline: none;
+  border-color: var(--accent);
 }

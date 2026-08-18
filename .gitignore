@@ -5,4 +5,8 @@ client/dist/
 server/public/
 server/bin/
 server/cloudflared.exe
+server/WBS/
 SimpleWorkFlow-dist/
+
+# WBS source documents (working data, regenerated; includes a binary xlsm)
+WBS/
